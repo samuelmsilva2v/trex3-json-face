@@ -11,7 +11,7 @@ Mostrador estilo editor de código (Zepp OS, 480x480) com hora, data, passos, ba
 json-face/
 ├── app.json                         # manifesto (appType: watchface, permissões dos sensores)
 ├── watchface/index.js               # layout + sensores
-└── assets/default.r/
+└── assets/default.w480-r/
     ├── icon.png                     # preview 324x324 (lista de mostradores)
     └── fonts/JetBrainsMono-Subset.ttf
 ```
@@ -79,7 +79,7 @@ Code-editor style watch face (Zepp OS, 480x480) showing time, date, steps, heart
 json-face/
 ├── app.json                         # manifest (appType: watchface, sensor permissions)
 ├── watchface/index.js               # layout + sensors
-└── assets/default.r/
+└── assets/default.w480-r/
     ├── icon.png                     # 324x324 preview (watch face list)
     └── fonts/JetBrainsMono-Subset.ttf
 ```

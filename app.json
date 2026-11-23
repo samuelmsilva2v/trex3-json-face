@@ -37,14 +37,21 @@
         }
       },
       "platforms": [
-        { "st": "r", "dw": 480 }
+        {
+          "st": "r",
+          "sr": "w480"
+        }
       ],
       "designWidth": 480
     }
   },
   "i18n": {
-    "en-US": { "appName": "status.json" },
-    "pt-BR": { "appName": "status.json" }
+    "en-US": {
+      "appName": "status.json"
+    },
+    "pt-BR": {
+      "appName": "status.json"
+    }
   },
   "defaultLanguage": "en-US"
 }
