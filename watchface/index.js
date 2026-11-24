@@ -7,11 +7,12 @@
  *   4    "steps": 8432,
  *   5    "heart_rate": 72,
  *   6    "kcal": 412,
- *   7    "distance": "5.21km"
- *   8  }
+ *   7    "distance": "5.21km",
+ *   8    "sleep": "7h32m"     (null sem registro de sono)
+ *   9  }
  */
 import { createWidget, widget, align, prop, text_style } from '@zos/ui'
-import { Time, Step, HeartRate, Calorie, Distance } from '@zos/sensor'
+import { Time, Step, HeartRate, Calorie, Distance, Sleep } from '@zos/sensor'
 import { connectStatus } from '@zos/ble'
 
 // ---------- tema ----------
@@ -40,14 +41,23 @@ const GUTTER_X = 50
 const GUTTER_W = 40
 const GUTTER_SIZE = 18
 
-const TOP = 66
+const TOP = 62
 const TIME_SIZE = 37
-const TIME_H = 52
+const TIME_H = 50
 const SIZE = 25
-const LINE_H = 42
+const LINE_H = 38
 
 const DAYS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'] // Time.getDay(): 1 = segunda ... 7 = domingo
 const pad = (n) => String(n).padStart(2, '0')
+// minutos de sono → "7h32m"; null quando o relógio não registrou sono
+const sleepText = (min) => (min > 0 ? `${Math.floor(min / 60)}h${pad(min % 60)}m` : null)
+const sleepMinutes = (s) => {
+  try {
+    return (s.getInfo() || {}).totalTime || 0
+  } catch (e) {
+    return 0 // sem permissão ou sem dado
+  }
+}
 
 function text(props) {
   return createWidget(widget.TEXT, {
@@ -128,6 +138,7 @@ WatchFace({
     this.hr = new HeartRate()
     this.cal = new Calorie()
     this.dist = new Distance()
+    this.sleep = new Sleep()
 
     // ---------- aba "status.json" ----------
     const tabSize = 17
@@ -168,16 +179,18 @@ WatchFace({
     y += LINE_H
     this.lKcal = kv(6, y, 'kcal', '0', C.num)
     y += LINE_H
-    this.lDist = kv(7, y, 'distance', '"0.00km"', C.str, false)
+    this.lDist = kv(7, y, 'distance', '"0.00km"', C.str)
     y += LINE_H
-    new CodeLine(8, y, LINE_H, SIZE, [{ text: '}', color: C.punct }])
+    this.lSleep = kv(8, y, 'sleep', 'null', C.nul, false)
+    y += LINE_H
+    new CodeLine(9, y, LINE_H, SIZE, [{ text: '}', color: C.punct }])
 
     // ---------- barra de status ----------
     const stSize = 16
     const stCw = stSize * ADV
-    const stRest = ' BT  ·  JSON  ·  Ln 8'
+    const stRest = ' BT  ·  JSON  ·  Ln 9'
     const stX = Math.round(240 - ((1 + stRest.length) * stCw) / 2)
-    const stY = 418
+    const stY = 420
     this.btDot = text({ x: stX, y: stY, w: 20, h: 24, text: '●', color: C.off, text_size: stSize })
     text({
       x: stX + Math.round(stCw),
@@ -211,15 +224,25 @@ WatchFace({
       const meters = this.dist.getCurrent() // em metros
       this.lDist.set(2, `"${(meters / 1000).toFixed(2)}km"`)
     }
+    this.updateSleep = () => {
+      const s = sleepText(sleepMinutes(this.sleep))
+      if (s) this.lSleep.set(2, `"${s}"`, C.str)
+      else this.lSleep.set(2, 'null', C.nul)
+    }
     this.updateAll = () => {
       this.updateTime()
       this.updateSteps()
       this.updateHr()
       this.updateKcal()
       this.updateDist()
+      this.updateSleep()
     }
 
-    this.time.onPerMinute(this.updateTime)
+    // sono não tem evento de mudança (o sistema recalcula a cada ~30 min): lê a cada minuto
+    this.time.onPerMinute(() => {
+      this.updateTime()
+      this.updateSleep()
+    })
     this.step.onChange(this.updateSteps)
     this.hr.onLastChange(this.updateHr)
     this.cal.onChange(this.updateKcal)

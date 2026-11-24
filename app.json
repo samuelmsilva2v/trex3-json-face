@@ -5,18 +5,19 @@
     "appName": "status.json",
     "appType": "watchface",
     "version": {
-      "code": 1,
-      "name": "1.0.0"
+      "code": 2,
+      "name": "1.1.0"
     },
     "icon": "icon.png",
     "vender": "samuel",
-    "description": "Mostrador estilo editor de código: hora, data, passos, batimentos, kcal e distância em JSON"
+    "description": "Mostrador estilo editor de código: hora, data, passos, batimentos, kcal, distância e sono em JSON"
   },
   "permissions": [
     "data:user.hd.step",
     "data:user.hd.heart_rate",
     "data:user.hd.calorie",
-    "data:user.hd.distance"
+    "data:user.hd.distance",
+    "data:user.hd.sleep"
   ],
   "runtime": {
     "apiVersion": {

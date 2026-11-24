@@ -1,7 +1,7 @@
 # status.json — mostrador para Amazfit T-Rex 3
 [🇺🇸 Read in English](#statusjson--watch-face-for-amazfit-t-rex-3)
 
-Mostrador estilo editor de código (Zepp OS, 480x480) com hora, data, passos, batimentos, kcal e distância em formato JSON.
+Mostrador estilo editor de código (Zepp OS, 480x480) com hora, data, passos, batimentos, kcal, distância e sono em formato JSON.
 
 ![Preview do mostrador](docs/preview.png)
 
@@ -59,6 +59,7 @@ O alinhamento das cores depende da fonte ser monoespaçada (cada caractere = 0,6
 
 - Batimento sem medição recente aparece como `null` (rosa).
 - Distância vem em metros do sensor e é exibida em km com 2 casas.
+- Sono: total de horas dormidas registradas pelo relógio (`7h32m`). Sem registro, aparece `null` (rosa), como o batimento. O sistema recalcula o sono a cada ~30 min, então o mostrador relê a cada minuto e ao acender a tela.
 - O ● da barra de status fica verde com o celular conectado por Bluetooth e cinza desconectado (atualiza a cada minuto).
 - Não tem versão AOD (tela sempre ligada) ainda.
 
@@ -69,7 +70,7 @@ Fonte: JetBrains Mono (SIL OFL 1.1), reduzida aos caracteres usados.
 # status.json — watch face for Amazfit T-Rex 3
 [🇧🇷 Leia em Português](#statusjson--mostrador-para-amazfit-t-rex-3)
 
-Code-editor style watch face (Zepp OS, 480x480) showing time, date, steps, heart rate, calories and distance as JSON.
+Code-editor style watch face (Zepp OS, 480x480) showing time, date, steps, heart rate, calories, distance and sleep as JSON.
 
 ![Watch face preview](docs/preview.png)
 
@@ -127,6 +128,7 @@ Color alignment relies on the font being monospaced (each character = 0.6 × siz
 
 - Heart rate with no recent reading shows as `null` (pink).
 - Distance comes from the sensor in meters and is shown in km with 2 decimals.
+- Sleep: total sleep recorded by the watch (`7h32m`). With no record it shows `null` (pink), like heart rate. The system recalculates sleep about every 30 min, so the face re-reads it every minute and when the screen wakes up.
 - The ● in the status bar is green while the phone is connected over Bluetooth and gray when disconnected (updates every minute).
 - No AOD (always-on display) version yet.
 
