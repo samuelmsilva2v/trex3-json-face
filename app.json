@@ -5,19 +5,23 @@
     "appName": "status.json",
     "appType": "watchface",
     "version": {
-      "code": 2,
-      "name": "1.1.0"
+      "code": 3,
+      "name": "1.2.0"
     },
     "icon": "icon.png",
     "vender": "samuel",
-    "description": "Mostrador estilo editor de código: hora, data, passos, batimentos, kcal, distância e sono em JSON"
+    "description": "Mostrador estilo editor de código: hora e dados em JSON, com comentário e campos editáveis"
   },
   "permissions": [
     "data:user.hd.step",
     "data:user.hd.heart_rate",
     "data:user.hd.calorie",
     "data:user.hd.distance",
-    "data:user.hd.sleep"
+    "data:user.hd.spo2",
+    "data:user.hd.stress",
+    "data:user.hd.pai",
+    "data:user.hd.stand",
+    "data:user.hd.fat_burning"
   ],
   "runtime": {
     "apiVersion": {
@@ -32,7 +36,7 @@
         "watchface": {
           "path": "watchface/index",
           "main": 1,
-          "editable": 0,
+          "editable": 1,
           "lockscreen": 0,
           "hightCost": 0
         }

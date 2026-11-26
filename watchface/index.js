@@ -1,18 +1,21 @@
 /**
  * status.json — mostrador estilo editor de código para Amazfit T-Rex 3 (480x480, Zepp OS)
  *
- *   1  "17:23"
+ *      17:23                       (hora solta, fora do JSON)
+ *   1  //PRIVATE INFO do not share (editável: 7 comentários)
  *   2  {
  *   3    "date": "qua 18/11",
- *   4    "steps": 8432,
- *   5    "heart_rate": 72,
+ *   4    "steps": 8432,            (linhas 4 a 7 editáveis: steps, heart_rate, kcal,
+ *   5    "heart_rate": 72,          battery, distance, spo2, stress, pai, stand, fat_burn)
  *   6    "kcal": 412,
- *   7    "distance": "5.21km",
- *   8    "sleep": "7h32m"     (null sem registro de sono)
- *   9  }
+ *   7    "battery": "78%"
+ *   8  }
+ *
+ * Edição: segure o mostrador → Editar → toque na linha e gire a coroa.
  */
+import * as zui from '@zos/ui'
 import { createWidget, widget, align, prop, text_style } from '@zos/ui'
-import { Time, Step, HeartRate, Calorie, Distance, Sleep } from '@zos/sensor'
+import { Time, Step, HeartRate, Calorie, Battery, Distance, BloodOxygen, Stress, Pai, Stand, FatBurning } from '@zos/sensor'
 import { connectStatus } from '@zos/ble'
 
 // ---------- tema ----------
@@ -21,12 +24,12 @@ const C = {
   str: 0x97c459, // strings
   num: 0xef9f27, // números
   nul: 0xed93b1, // null
+  comment: 0x6b6a65, // // comentário (cinza)
+  time: 0xd3d1c7, // hora
   punct: 0x888780, // { } : ,
   gutter: 0x444441, // números de linha
   muted: 0x5f5e5a, // barra de status
-  accent: 0x5dcaa5, // aba ativa / BT conectado
-  tabBg: 0x1a1a1a,
-  tabText: 0xd3d1c7,
+  accent: 0x5dcaa5, // BT conectado
   off: 0x444441 // BT desconectado
 }
 
@@ -41,23 +44,96 @@ const GUTTER_X = 50
 const GUTTER_W = 40
 const GUTTER_SIZE = 18
 
-const TOP = 62
-const TIME_SIZE = 37
-const TIME_H = 50
+const TOP = 40
+const TIME_SIZE = 64
+const TIME_H = 80
 const SIZE = 25
-const LINE_H = 38
+const LINE_H = 37
+const COMMENT_SIZE = 20 // menor que o resto pra caber na largura da tela
+
+// ---------- comentários (opções do modo de edição) ----------
+// tipos próprios precisam ficar acima de 0x186a0 (100000)
+const COMMENTS = [
+  '//PRIVATE INFO do not share',
+  '//TODO: dormir mais',
+  '//eslint-disable-line',
+  '//FIXME: steps < goal',
+  '//do not commit this file',
+  '//generated, do not edit',
+  '//it works on my wrist'
+]
+const COMMENT_TYPE_BASE = 100001
+
+// ---------- dados (opções das linhas editáveis) ----------
+// edit: nome em edit_type; value(sensor) → [texto, cor]
+const nullable = (v) => (v > 0 ? [String(v), C.num] : ['null', C.nul])
+const FIELDS = {
+  steps: { edit: 'STEP', make: () => new Step(), value: (s) => [String(s.getCurrent()), C.num] },
+  heart_rate: {
+    edit: 'HEART',
+    make: () => new HeartRate(),
+    on: 'onLastChange',
+    off: 'offLastChange',
+    value: (s) => nullable(s.getLast())
+  },
+  kcal: { edit: 'CAL', make: () => new Calorie(), value: (s) => [String(Math.round(s.getCurrent())), C.num] },
+  battery: { edit: 'BATTERY', make: () => new Battery(), value: (s) => [`"${s.getCurrent()}%"`, C.str] },
+  distance: { edit: 'DISTANCE', make: () => new Distance(), value: (s) => [`"${(s.getCurrent() / 1000).toFixed(2)}km"`, C.str] },
+  spo2: { edit: 'SPO2', make: () => new BloodOxygen(), value: (s) => nullable((s.getCurrent() || {}).value) },
+  stress: { edit: 'STRESS', make: () => new Stress(), value: (s) => nullable((s.getCurrent() || {}).value) },
+  pai: { edit: 'PAI', make: () => new Pai(), value: (s) => [String(s.getTotal()), C.num] },
+  stand: { edit: 'STAND', make: () => new Stand(), value: (s) => [`"${s.getCurrent()}/${s.getTarget()}"`, C.str] },
+  fat_burn: { edit: 'FAT_BURN', make: () => new FatBurning(), value: (s) => [String(s.getCurrent()), C.num] }
+}
+const SLOT_DEFAULTS = ['steps', 'heart_rate', 'kcal', 'battery']
+
+// ---------- API de edição ----------
+// A doc só descreve a edição na API antiga (hmUI global); usa @zos/ui quando tiver e cai pra hmUI.
+// Os números são os do hmUI (WATCHFACE_EDIT_GROUP = 65539, prop.CURRENT_TYPE = 51).
+const LEGACY = typeof hmUI !== 'undefined' ? hmUI : {}
+const EDIT_TYPE = zui.edit_type || LEGACY.edit_type || null
+const EDIT_GROUP = (widget && widget.WATCHFACE_EDIT_GROUP) || (LEGACY.widget && LEGACY.widget.WATCHFACE_EDIT_GROUP) || 65539
+const CURRENT_TYPE = (prop && prop.CURRENT_TYPE) || (LEGACY.prop && LEGACY.prop.CURRENT_TYPE) || 51
+const EDIT = 'edit/'
+const TIP = { x: 165, y: 50 } // etiqueta com o nome da opção aparece sobre a hora
+
+/** Cria um grupo editável; null se o sistema não suportar (o mostrador segue com o padrão). */
+function editGroup(opts) {
+  const all = {
+    x: CODE_X - 8,
+    w: 340,
+    h: LINE_H,
+    select_image: EDIT + 'select.png',
+    un_select_image: EDIT + 'unselect.png',
+    tips_BG: EDIT + 'tips.png',
+    tips_x: TIP.x - (CODE_X - 8),
+    tips_y: TIP.y - opts.y,
+    tips_width: 150,
+    count: opts.optional_types.length,
+    ...opts
+  }
+  try {
+    return createWidget(EDIT_GROUP, all)
+  } catch (e) {
+    try {
+      return LEGACY.createWidget(EDIT_GROUP, all)
+    } catch (e2) {
+      return null
+    }
+  }
+}
+
+function currentType(group, fallback) {
+  try {
+    const v = group && group.getProperty(CURRENT_TYPE)
+    return typeof v === 'number' ? v : fallback // 0 é um tipo válido (bateria no hmUI)
+  } catch (e) {
+    return fallback
+  }
+}
 
 const DAYS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'] // Time.getDay(): 1 = segunda ... 7 = domingo
 const pad = (n) => String(n).padStart(2, '0')
-// minutos de sono → "7h32m"; null quando o relógio não registrou sono
-const sleepText = (min) => (min > 0 ? `${Math.floor(min / 60)}h${pad(min % 60)}m` : null)
-const sleepMinutes = (s) => {
-  try {
-    return (s.getInfo() || {}).totalTime || 0
-  } catch (e) {
-    return 0 // sem permissão ou sem dado
-  }
-}
 
 function text(props) {
   return createWidget(widget.TEXT, {
@@ -132,63 +208,63 @@ function kv(n, y, key, value, color, comma = true) {
 
 WatchFace({
   build() {
-    // ---------- sensores ----------
     this.time = new Time()
-    this.step = new Step()
-    this.hr = new HeartRate()
-    this.cal = new Calorie()
-    this.dist = new Distance()
-    this.sleep = new Sleep()
+    this.sensors = {} // um sensor por tipo de dado em uso
+    this.subs = [] // [sensor, nome do off, callback] pra soltar no onDestroy
 
-    // ---------- aba "status.json" ----------
-    const tabSize = 17
-    const tabCw = tabSize * ADV
-    const tabLabel = ' status.json'
-    const tabPad = 13
-    const tabW = Math.round((2 + tabLabel.length) * tabCw) + tabPad * 2
-    const closeW = 24
-    const tabX = Math.round(240 - (tabW + 6 + closeW) / 2)
-    const tabY = 26
-    const tabH = 30
-
-    createWidget(widget.FILL_RECT, { x: tabX, y: tabY, w: tabW, h: tabH, color: C.tabBg })
-    createWidget(widget.FILL_RECT, { x: tabX, y: tabY, w: tabW, h: 3, color: C.accent })
-    text({ x: tabX + tabPad, y: tabY + 2, w: 30, h: tabH, text: '{}', color: C.num, text_size: tabSize })
-    text({
-      x: tabX + tabPad + Math.round(2 * tabCw),
-      y: tabY + 2,
-      w: Math.ceil(tabLabel.length * tabCw) + tabSize,
-      h: tabH,
-      text: tabLabel,
-      color: C.tabText,
-      text_size: tabSize
-    })
-    text({ x: tabX + tabW + 6, y: tabY + 2, w: closeW, h: tabH, text: '×', color: C.gutter, text_size: tabSize, align_h: align.CENTER_H })
-
-    // ---------- código ----------
+    // ---------- hora ----------
     let y = TOP
-    this.lTime = new CodeLine(1, y, TIME_H, TIME_SIZE, [{ text: '"00:00"', color: C.str }])
+    this.tTime = text({ x: 40, y, w: 400, h: TIME_H, text: '00:00', color: C.time, text_size: TIME_SIZE, align_h: align.CENTER_H })
     y += TIME_H
+
+    // ---------- comentário (editável) ----------
+    const cGroup = editGroup({
+      edit_id: 110,
+      y,
+      default_type: COMMENT_TYPE_BASE,
+      optional_types: COMMENTS.map((c, i) => ({
+        type: COMMENT_TYPE_BASE + i,
+        preview: `${EDIT}comment${i}.png`,
+        title_en: c,
+        title_sc: c,
+        title_tc: c
+      }))
+    })
+    const ci = currentType(cGroup, COMMENT_TYPE_BASE) - COMMENT_TYPE_BASE
+    new CodeLine(1, y, LINE_H, COMMENT_SIZE, [{ text: COMMENTS[ci] || COMMENTS[0], color: C.comment }])
+    y += LINE_H
+
     new CodeLine(2, y, LINE_H, SIZE, [{ text: '{', color: C.punct }])
     y += LINE_H
     this.lDate = kv(3, y, 'date', '""', C.str)
     y += LINE_H
-    this.lSteps = kv(4, y, 'steps', '0', C.num)
-    y += LINE_H
-    this.lHr = kv(5, y, 'heart_rate', 'null', C.nul)
-    y += LINE_H
-    this.lKcal = kv(6, y, 'kcal', '0', C.num)
-    y += LINE_H
-    this.lDist = kv(7, y, 'distance', '"0.00km"', C.str)
-    y += LINE_H
-    this.lSleep = kv(8, y, 'sleep', 'null', C.nul, false)
-    y += LINE_H
-    new CodeLine(9, y, LINE_H, SIZE, [{ text: '}', color: C.punct }])
+
+    // ---------- linhas de dados (editáveis) ----------
+    const names = Object.keys(FIELDS)
+    this.slots = SLOT_DEFAULTS.map((def, i) => {
+      let name = def
+      if (EDIT_TYPE) {
+        const group = editGroup({
+          edit_id: 101 + i,
+          y,
+          default_type: EDIT_TYPE[FIELDS[def].edit],
+          optional_types: names
+            .filter((n) => EDIT_TYPE[FIELDS[n].edit] !== undefined)
+            .map((n) => ({ type: EDIT_TYPE[FIELDS[n].edit], preview: `${EDIT}${n}.png` }))
+        })
+        const t = currentType(group, EDIT_TYPE[FIELDS[def].edit])
+        name = names.find((n) => EDIT_TYPE[FIELDS[n].edit] === t) || def
+      }
+      const line = kv(4 + i, y, name, 'null', C.nul, i < SLOT_DEFAULTS.length - 1)
+      y += LINE_H
+      return { name, line }
+    })
+    new CodeLine(4 + SLOT_DEFAULTS.length, y, LINE_H, SIZE, [{ text: '}', color: C.punct }])
 
     // ---------- barra de status ----------
     const stSize = 16
     const stCw = stSize * ADV
-    const stRest = ' BT  ·  JSON  ·  Ln 9'
+    const stRest = ' BT  ·  JSON  ·  Ln 8'
     const stX = Math.round(240 - ((1 + stRest.length) * stCw) / 2)
     const stY = 420
     this.btDot = text({ x: stX, y: stY, w: 20, h: 24, text: '●', color: C.off, text_size: stSize })
@@ -205,7 +281,7 @@ WatchFace({
     // ---------- atualização ----------
     this.updateTime = () => {
       const t = this.time
-      this.lTime.set(0, `"${pad(t.getHours())}:${pad(t.getMinutes())}"`)
+      this.tTime.setProperty(prop.MORE, { text: `${pad(t.getHours())}:${pad(t.getMinutes())}` })
       this.lDate.set(2, `"${DAYS[t.getDay() - 1] || ''} ${pad(t.getDate())}/${pad(t.getMonth())}"`)
       let bt = false
       try {
@@ -213,51 +289,47 @@ WatchFace({
       } catch (e) {}
       this.btDot.setProperty(prop.MORE, { color: bt ? C.accent : C.off })
     }
-    this.updateSteps = () => this.lSteps.set(2, String(this.step.getCurrent()))
-    this.updateHr = () => {
-      const v = this.hr.getLast()
-      if (v > 0) this.lHr.set(2, String(v), C.num)
-      else this.lHr.set(2, 'null', C.nul)
-    }
-    this.updateKcal = () => this.lKcal.set(2, String(Math.round(this.cal.getCurrent())))
-    this.updateDist = () => {
-      const meters = this.dist.getCurrent() // em metros
-      this.lDist.set(2, `"${(meters / 1000).toFixed(2)}km"`)
-    }
-    this.updateSleep = () => {
-      const s = sleepText(sleepMinutes(this.sleep))
-      if (s) this.lSleep.set(2, `"${s}"`, C.str)
-      else this.lSleep.set(2, 'null', C.nul)
-    }
+
+    this.slots.forEach((slot) => {
+      const f = FIELDS[slot.name]
+      if (!(slot.name in this.sensors)) {
+        try {
+          this.sensors[slot.name] = f.make()
+        } catch (e) {
+          this.sensors[slot.name] = null // sensor indisponível: linha fica null
+        }
+      }
+      const s = this.sensors[slot.name]
+      slot.update = () => {
+        let v = ['null', C.nul]
+        try {
+          if (s) v = f.value(s)
+        } catch (e) {}
+        slot.line.set(2, v[0], v[1])
+      }
+      const on = f.on || 'onChange'
+      if (s && typeof s[on] === 'function') {
+        s[on](slot.update)
+        this.subs.push([s, f.off || 'offChange', slot.update])
+      }
+    })
+
+    // alguns sensores (PAI) não têm evento: tudo é relido a cada minuto e ao acender a tela
     this.updateAll = () => {
       this.updateTime()
-      this.updateSteps()
-      this.updateHr()
-      this.updateKcal()
-      this.updateDist()
-      this.updateSleep()
+      this.slots.forEach((s) => s.update())
     }
-
-    // sono não tem evento de mudança (o sistema recalcula a cada ~30 min): lê a cada minuto
-    this.time.onPerMinute(() => {
-      this.updateTime()
-      this.updateSleep()
-    })
-    this.step.onChange(this.updateSteps)
-    this.hr.onLastChange(this.updateHr)
-    this.cal.onChange(this.updateKcal)
-    this.dist.onChange(this.updateDist)
-
-    // ao acordar a tela, garante tudo atualizado
+    this.time.onPerMinute(this.updateAll)
     createWidget(widget.WIDGET_DELEGATE, { resume_call: this.updateAll })
 
     this.updateAll()
   },
 
   onDestroy() {
-    this.step && this.step.offChange(this.updateSteps)
-    this.hr && this.hr.offLastChange(this.updateHr)
-    this.cal && this.cal.offChange(this.updateKcal)
-    this.dist && this.dist.offChange(this.updateDist)
+    ;(this.subs || []).forEach(([s, off, cb]) => {
+      try {
+        s[off](cb)
+      } catch (e) {}
+    })
   }
 })
